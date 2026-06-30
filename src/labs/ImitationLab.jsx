@@ -1,40 +1,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import SimulationCanvas from '../components/SimulationCanvas';
-import TheoryPanel from '../components/TheoryPanel';
 import ExerciseTracker from '../components/ExerciseTracker';
 import { NeuralNetwork } from '../utils/nn';
 import { clamp } from '../utils/math';
-
-const theorySections = [
-  {
-    icon: 'info',
-    title: 'Supervised Learning',
-    content: <p>In Imitation Learning, we train a neural network to mimic a human expert. The network learns a mapping from <strong>States</strong> (what the robot sees) to <strong>Actions</strong> (what the robot should do).</p>
-  },
-  {
-    icon: 'lightbulb',
-    title: 'Data Collection',
-    content: (
-      <div className="space-y-2">
-        <p>First, a human drives the car. We record pairs of <code>(State, Action)</code>.</p>
-        <ul className="list-disc pl-4 text-slate-400 space-y-1">
-          <li><strong>State:</strong> Distance to the left and right walls.</li>
-          <li><strong>Action:</strong> Steer left, right, or go straight.</li>
-        </ul>
-      </div>
-    )
-  },
-  {
-    icon: 'lightbulb',
-    title: 'Training the Network',
-    content: <p>We use <strong>Gradient Descent</strong> to adjust the network's weights. The <em>Loss</em> measures the difference between the network's predicted action and the human's actual action. Over time, the loss decreases and the network "learns" to drive.</p>
-  },
-  {
-    icon: 'play',
-    title: 'Autonomous Mode',
-    content: <p>Once trained, we hand over control to the neural network. It looks at the current distances to the walls and outputs the best action to avoid crashing.</p>
-  }
-];
 
 const ImitationLab = () => {
   const [mode, setMode] = useState('human'); // 'human', 'training', 'auto'
@@ -220,18 +188,44 @@ const ImitationLab = () => {
       {/* Scrollable Right Sidebar */}
       <div className="w-full xl:w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-t xl:border-t-0 xl:border-l border-slate-700/50 overflow-y-visible xl:overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
         
+        {/* Dashboard Header */}
+        <div className="p-5 border-b border-slate-700/50 bg-slate-800/80">
+          <h2 className="text-lg font-bold bg-gradient-to-r from-orange-400 to-indigo-400 bg-clip-text text-transparent mb-1">
+            Self-Driving AI
+          </h2>
+          <p className="text-xs text-slate-400">
+            Train a Neural Network to drive by imitating your keystrokes.
+          </p>
+        </div>
+
+        {/* Live Metrics */}
+        <div className="p-5 border-b border-slate-700/50 bg-slate-900/50">
+          <h3 className="text-xs font-semibold text-slate-400 mb-4 uppercase tracking-wider">Training Telemetry</h3>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700/50 shadow-inner">
+              <div className="text-[10px] text-slate-500 mb-1 uppercase">Dataset Size</div>
+              <div className="text-lg font-mono text-orange-400">{dataCount}</div>
+            </div>
+            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700/50 shadow-inner">
+              <div className="text-[10px] text-slate-500 mb-1 uppercase">Network Loss</div>
+              <div className="text-lg font-mono text-indigo-400">{loss.toFixed(4)}</div>
+            </div>
+          </div>
+          
+          <div className="bg-slate-800 p-3 rounded-lg border border-slate-700/50 shadow-inner">
+             <div className="text-[10px] text-slate-500 mb-2 uppercase">Status</div>
+             <div className="flex items-center space-x-2">
+                <div className={`w-2 h-2 rounded-full ${mode === 'human' ? 'bg-blue-500 animate-pulse' : mode === 'training' ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+                <span className="text-sm font-semibold text-slate-300">
+                  {mode === 'human' ? 'Awaiting Human Data...' : mode === 'training' ? 'Training Neural Net...' : 'AI Driving Engaged'}
+                </span>
+             </div>
+          </div>
+        </div>
+
         {/* Controls Section */}
         <div className="p-5 border-b border-slate-700/50 bg-slate-800/60 shadow-inner">
-           <div className="flex justify-between items-center mb-4">
-              <span className="font-semibold text-slate-200">Current Mode:</span>
-              <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
-                mode === 'human' ? 'bg-blue-500/20 text-blue-400' : 
-                mode === 'training' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'
-              }`}>
-                {mode}
-              </span>
-           </div>
-           
+           <h3 className="text-xs font-semibold text-slate-400 mb-4 uppercase tracking-wider">Mission Control</h3>
            <div className="space-y-3">
              <button 
                onClick={() => {
@@ -242,23 +236,23 @@ const ImitationLab = () => {
                  setDataCount(0);
                  setMode('human');
                }}
-               className="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded transition-colors text-sm font-semibold"
+               className="w-full py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-sm font-semibold shadow-md"
              >
-               Reset & Collect Data
+               Start Over / Collect Data
              </button>
              
              <button 
                onClick={() => setMode('training')}
                disabled={dataCount < 10}
-               className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors text-sm font-semibold"
+               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-semibold shadow-md"
              >
-               Train Network
+               Initiate Training Sequence
              </button>
            </div>
         </div>
 
         {/* Exercise Tracker */}
-        <div className="border-b border-slate-700/50">
+        <div className="p-5 flex-1 bg-slate-800/40">
           <ExerciseTracker 
             title="Exercise: Teach the Car" 
             description="Use the Left and Right arrow keys to keep the car on the road. The Neural Network will record your actions."
@@ -269,13 +263,6 @@ const ImitationLab = () => {
             ]}
           />
         </div>
-
-        {/* Theory Panel */}
-        <TheoryPanel 
-          title="Imitation Learning" 
-          description="Explore how robots can learn complex behaviors simply by observing human experts."
-          sections={theorySections} 
-        />
       </div>
     </div>
   );

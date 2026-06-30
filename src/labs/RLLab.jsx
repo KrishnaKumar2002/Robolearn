@@ -1,45 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import SimulationCanvas from '../components/SimulationCanvas';
-import TheoryPanel from '../components/TheoryPanel';
 import ExerciseTracker from '../components/ExerciseTracker';
-
-const theorySections = [
-  {
-    icon: 'info',
-    title: 'Reinforcement Learning',
-    content: <p>Instead of being told what to do (like in Imitation Learning), an RL agent learns by <strong>Trial and Error</strong>. It explores an environment, takes actions, and receives <em>Rewards</em> or <em>Penalties</em>.</p>
-  },
-  {
-    icon: 'lightbulb',
-    title: 'The Q-Table',
-    content: (
-      <div className="space-y-2">
-        <p>The agent maintains a "cheat sheet" called a <strong>Q-Table</strong>. For every state (grid cell) and action (up, down, left, right), it stores a "Q-value" representing the expected long-term reward.</p>
-      </div>
-    )
-  },
-  {
-    icon: 'lightbulb',
-    title: 'The Bellman Equation',
-    content: (
-      <div className="space-y-2">
-        <p>When the agent moves from State A to State B and gets a reward, it updates the Q-value of State A using the Bellman Equation:</p>
-        <div className="p-3 bg-slate-900 rounded font-mono text-xs text-blue-400">
-          Q(s,a) = Q(s,a) + α * (Reward + γ * MaxQ(s') - Q(s,a))
-        </div>
-        <ul className="list-disc pl-4 text-slate-400 text-xs mt-2">
-          <li><strong>α (Alpha):</strong> Learning Rate</li>
-          <li><strong>γ (Gamma):</strong> Discount Factor (values future rewards)</li>
-        </ul>
-      </div>
-    )
-  },
-  {
-    icon: 'play',
-    title: 'Exploration vs Exploitation',
-    content: <p>Early on, the agent moves randomly (Exploration) to discover the map. Later, it follows the Q-Table (Exploitation) to take the best known path to the goal.</p>
-  }
-];
 
 // Grid World: 0 = empty, 1 = wall, 2 = goal, 3 = trap
 const GRID_SIZE = 10;
@@ -228,31 +189,56 @@ const RLLab = () => {
       </div>
 
       {/* Scrollable Right Sidebar */}
-      <div className="w-full xl:w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-t xl:border-t-0 xl:border-l border-slate-700/50 overflow-y-visible xl:overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+      <div className="w-full xl:w-[400px] flex flex-col bg-slate-800/90 backdrop-blur-xl border-t xl:border-t-0 xl:border-l border-slate-700/50 overflow-y-visible xl:overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
         
+        {/* Dashboard Header */}
+        <div className="p-5 border-b border-slate-700/50 bg-slate-800/80">
+          <h2 className="text-lg font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-1">
+            Q-Learning AI
+          </h2>
+          <p className="text-xs text-slate-400">
+            Watch the AI learn to navigate the maze through trial and error. Blue arrows indicate the learned Q-values (expected rewards).
+          </p>
+        </div>
+
+        {/* Live Metrics */}
+        <div className="p-5 border-b border-slate-700/50 bg-slate-900/50">
+          <h3 className="text-xs font-semibold text-slate-400 mb-4 uppercase tracking-wider">Learning Telemetry</h3>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700/50 shadow-inner flex flex-col">
+              <div className="text-[10px] text-slate-500 mb-1 uppercase">Episodes</div>
+              <div className="text-lg font-mono text-purple-400">{episodes}</div>
+            </div>
+            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700/50 shadow-inner flex flex-col">
+              <div className="text-[10px] text-slate-500 mb-1 uppercase">Exploration Rate</div>
+              <div className="text-lg font-mono text-pink-400">{epsilon.toFixed(2)}</div>
+            </div>
+          </div>
+          
+          <div className="bg-slate-800 p-3 rounded-lg border border-slate-700/50 shadow-inner">
+             <div className="text-[10px] text-slate-500 mb-2 uppercase">Status</div>
+             <div className="flex items-center space-x-2">
+                <div className={`w-2 h-2 rounded-full ${training ? 'bg-pink-500 animate-pulse' : 'bg-slate-500'}`}></div>
+                <span className="text-sm font-semibold text-slate-300">
+                  {training ? (epsilon > 0.1 ? 'Exploring map...' : 'Exploiting known paths...') : 'Training Paused'}
+                </span>
+             </div>
+          </div>
+        </div>
+
         {/* Controls Section */}
         <div className="p-5 border-b border-slate-700/50 bg-slate-800/60 shadow-inner">
-           <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="bg-slate-900/80 p-3 rounded border border-slate-700/50 shadow-inner">
-                <div className="text-xs text-slate-400 mb-1">Episodes</div>
-                <div className="text-lg font-mono text-slate-200">{episodes}</div>
-              </div>
-              <div className="bg-slate-900/80 p-3 rounded border border-slate-700/50 shadow-inner">
-                <div className="text-xs text-slate-400 mb-1">Exploration Rate</div>
-                <div className="text-lg font-mono text-blue-400">{epsilon.toFixed(2)}</div>
-              </div>
-           </div>
-           
+           <h3 className="text-xs font-semibold text-slate-400 mb-4 uppercase tracking-wider">Mission Control</h3>
            <button 
              onClick={() => setTraining(!training)}
-             className={`w-full py-2.5 rounded transition-colors text-sm font-bold uppercase tracking-wider ${training ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+             className={`w-full py-2.5 rounded-lg transition-colors text-sm font-bold uppercase tracking-wider shadow-md ${training ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
            >
              {training ? 'Pause Training' : 'Start Training'}
            </button>
         </div>
 
         {/* Exercise Tracker */}
-        <div className="border-b border-slate-700/50">
+        <div className="p-5 flex-1 bg-slate-800/40">
           <ExerciseTracker 
             title="Exercise: Escape the Maze" 
             description="Train the RL agent to find the green Goal while avoiding the red Traps."
@@ -263,13 +249,6 @@ const RLLab = () => {
             ]}
           />
         </div>
-
-        {/* Theory Panel */}
-        <TheoryPanel 
-          title="Q-Learning" 
-          description="Understand how AI learns to master games and robotics by optimizing for long-term rewards."
-          sections={theorySections} 
-        />
       </div>
     </div>
   );

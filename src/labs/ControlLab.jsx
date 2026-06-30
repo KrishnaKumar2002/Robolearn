@@ -1,58 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import SimulationCanvas from '../components/SimulationCanvas';
-import TheoryPanel from '../components/TheoryPanel';
 import ExerciseTracker from '../components/ExerciseTracker';
 import { clamp } from '../utils/math';
 
 const GRAVITY = 9.81;
 const MASS = 1.0;
 const MAX_THRUST = 20.0;
-
-const theorySections = [
-  {
-    icon: 'info',
-    title: 'The Goal: Hovering',
-    content: <p>A drone needs to dynamically adjust its thrust to counteract gravity and hover at a target altitude. Because real-world environments are noisy, we use a <strong>PID Controller</strong> to smoothly reach the target.</p>
-  },
-  {
-    icon: 'lightbulb',
-    title: 'P: Proportional',
-    content: (
-      <div className="space-y-2">
-        <p>The <strong>Proportional</strong> term acts like a spring. The further you are from the target, the harder it pulls you back.</p>
-        <div className="p-3 bg-slate-900 rounded font-mono text-xs text-blue-400">
-          Thrust += Kp * (Target - Current)
-        </div>
-        <p><em>Caveat:</em> If Kp is too high, the drone will overshoot and oscillate wildly!</p>
-      </div>
-    )
-  },
-  {
-    icon: 'lightbulb',
-    title: 'D: Derivative',
-    content: (
-      <div className="space-y-2">
-        <p>The <strong>Derivative</strong> term acts like a shock absorber. It predicts the future by looking at your current velocity and slows you down as you approach the target to prevent overshooting.</p>
-        <div className="p-3 bg-slate-900 rounded font-mono text-xs text-emerald-400">
-          Thrust += Kd * (-Velocity)
-        </div>
-      </div>
-    )
-  },
-  {
-    icon: 'lightbulb',
-    title: 'I: Integral',
-    content: (
-      <div className="space-y-2">
-        <p>The <strong>Integral</strong> term accumulates past errors. If the drone is slightly too heavy (e.g. wind or unmodeled weight) and hovers just below the target, the Integral term builds up over time to give it that extra push.</p>
-        <div className="p-3 bg-slate-900 rounded font-mono text-xs text-purple-400">
-          ErrorSum += (Target - Current) * dt<br/>
-          Thrust += Ki * ErrorSum
-        </div>
-      </div>
-    )
-  }
-];
 
 const ControlLab = () => {
   const [kp, setKp] = useState(0.0);
@@ -207,6 +160,21 @@ const ControlLab = () => {
     setTargetY(600 - y);
   };
 
+  const [metrics, setMetrics] = useState({ altitude: 0, thrust: 0, error: 0 });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (stateRef.current) {
+        setMetrics({
+          altitude: stateRef.current.y,
+          thrust: stateRef.current.integral + kp * (targetY - stateRef.current.y) - kd * stateRef.current.vy,
+          error: targetY - stateRef.current.y
+        });
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [kp, kd, targetY]);
+
   return (
     <div className="flex flex-col xl:flex-row h-full w-full bg-slate-900 overflow-y-auto xl:overflow-hidden">
       
@@ -218,30 +186,61 @@ const ControlLab = () => {
         </div>
       </div>
 
-      {/* Scrollable Right Sidebar */}
-      <div className="w-full xl:w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-t xl:border-t-0 xl:border-l border-slate-700/50 overflow-y-visible xl:overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+      {/* Dashboard Sidebar */}
+      <div className="w-full xl:w-[400px] flex flex-col bg-slate-800/90 backdrop-blur-xl border-t xl:border-t-0 xl:border-l border-slate-700/50 overflow-y-visible xl:overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
         
+        {/* Header */}
+        <div className="p-5 border-b border-slate-700/50 bg-slate-800/80">
+          <h2 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-1">
+            PID Flight Controller
+          </h2>
+          <p className="text-xs text-slate-400">
+            Tune the parameters to stabilize the drone's altitude. The blue line tracks the flight path.
+          </p>
+        </div>
+
+        {/* Live Metrics */}
+        <div className="p-5 border-b border-slate-700/50 bg-slate-900/50">
+          <h3 className="text-xs font-semibold text-slate-400 mb-4 uppercase tracking-wider">Live Telemetry</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700/50 shadow-inner">
+              <div className="text-[10px] text-slate-500 mb-1 uppercase">Altitude</div>
+              <div className="text-lg font-mono text-blue-400">{metrics.altitude.toFixed(0)}</div>
+            </div>
+            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700/50 shadow-inner">
+              <div className="text-[10px] text-slate-500 mb-1 uppercase">Target Error</div>
+              <div className="text-lg font-mono text-rose-400">{Math.abs(metrics.error).toFixed(0)}</div>
+            </div>
+            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700/50 shadow-inner">
+              <div className="text-[10px] text-slate-500 mb-1 uppercase">Thrust %</div>
+              <div className="text-lg font-mono text-emerald-400">{Math.max(0, Math.min(100, (metrics.thrust / 20) * 100)).toFixed(0)}%</div>
+            </div>
+          </div>
+        </div>
+
         {/* Controls Section */}
-        <div className="p-5 border-b border-slate-700/50 bg-slate-800/60 shadow-inner">
-          <h3 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wider">PID Parameters</h3>
-          <div className="space-y-4">
+        <div className="p-5 border-b border-slate-700/50 bg-slate-800/60">
+          <h3 className="text-xs font-semibold text-slate-300 mb-4 uppercase tracking-wider flex justify-between">
+            <span>PID Parameters</span>
+          </h3>
+          <div className="space-y-5">
             <div>
               <label className="flex justify-between text-xs mb-1.5">
-                <span className="font-semibold text-slate-200">Proportional (Kp)</span>
+                <span className="font-semibold text-slate-200">Proportional (Kp) - Pull Power</span>
                 <span className="text-blue-400 font-mono bg-blue-400/10 px-1.5 rounded">{kp.toFixed(1)}</span>
               </label>
               <input type="range" min="0" max="10" step="0.1" value={kp} onChange={e => setKp(parseFloat(e.target.value))} className="w-full accent-blue-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" />
             </div>
             <div>
               <label className="flex justify-between text-xs mb-1.5">
-                <span className="font-semibold text-slate-200">Derivative (Kd)</span>
+                <span className="font-semibold text-slate-200">Derivative (Kd) - Dampening</span>
                 <span className="text-emerald-400 font-mono bg-emerald-400/10 px-1.5 rounded">{kd.toFixed(1)}</span>
               </label>
               <input type="range" min="0" max="10" step="0.1" value={kd} onChange={e => setKd(parseFloat(e.target.value))} className="w-full accent-emerald-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" />
             </div>
             <div>
               <label className="flex justify-between text-xs mb-1.5">
-                <span className="font-semibold text-slate-200">Integral (Ki)</span>
+                <span className="font-semibold text-slate-200">Integral (Ki) - Gravity Comp</span>
                 <span className="text-purple-400 font-mono bg-purple-400/10 px-1.5 rounded">{ki.toFixed(2)}</span>
               </label>
               <input type="range" min="0" max="2" step="0.01" value={ki} onChange={e => setKi(parseFloat(e.target.value))} className="w-full accent-purple-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" />
@@ -250,10 +249,10 @@ const ControlLab = () => {
         </div>
 
         {/* Exercise Tracker */}
-        <div className="border-b border-slate-700/50">
+        <div className="p-5 flex-1 bg-slate-800/40">
           <ExerciseTracker 
             title="Exercise: Stable Hover" 
-            description="Tune the PID values so the drone reaches the green target line without oscillating out of control."
+            description="Tune the PID values so the drone reaches the green target line without oscillating."
             tasks={[
               { label: 'Set Kp > 0 for spring pull', completed: kp > 0, hint: 'Start with Kp = 3.0' },
               { label: 'Set Kd > 0 to dampen oscillations', completed: kd > 0, hint: 'Start with Kd = 2.0' },
@@ -261,13 +260,6 @@ const ControlLab = () => {
             ]}
           />
         </div>
-
-        {/* Theory Panel */}
-        <TheoryPanel 
-          title="PID Control" 
-          description="Learn how autonomous robots maintain stability and reach their targets smoothly without crashing."
-          sections={theorySections} 
-        />
       </div>
     </div>
   );
