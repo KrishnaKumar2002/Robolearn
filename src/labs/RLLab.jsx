@@ -223,10 +223,36 @@ const RLLab = () => {
     <div className="flex h-full w-full bg-slate-900 overflow-hidden">
       
       {/* Simulation Area */}
-      <div className="flex-1 flex flex-col p-6 gap-6">
+      <div className="flex-1 bg-slate-950 relative min-w-0 min-h-0 overflow-hidden">
+        <SimulationCanvas draw={draw} update={update} width={800} height={800} className="w-full h-full object-contain p-4" />
+      </div>
+
+      {/* Scrollable Right Sidebar */}
+      <div className="w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-l border-slate-700/50 overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
         
-        {/* Top bar with Exercise & Controls */}
-        <div className="grid grid-cols-2 gap-6 h-64 shrink-0">
+        {/* Controls Section */}
+        <div className="p-5 border-b border-slate-700/50 bg-slate-800/60 shadow-inner">
+           <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-slate-900/80 p-3 rounded border border-slate-700/50 shadow-inner">
+                <div className="text-xs text-slate-400 mb-1">Episodes</div>
+                <div className="text-lg font-mono text-slate-200">{episodes}</div>
+              </div>
+              <div className="bg-slate-900/80 p-3 rounded border border-slate-700/50 shadow-inner">
+                <div className="text-xs text-slate-400 mb-1">Exploration Rate</div>
+                <div className="text-lg font-mono text-blue-400">{epsilon.toFixed(2)}</div>
+              </div>
+           </div>
+           
+           <button 
+             onClick={() => setTraining(!training)}
+             className={`w-full py-2.5 rounded transition-colors text-sm font-bold uppercase tracking-wider ${training ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+           >
+             {training ? 'Pause Training' : 'Start Training'}
+           </button>
+        </div>
+
+        {/* Exercise Tracker */}
+        <div className="border-b border-slate-700/50">
           <ExerciseTracker 
             title="Exercise: Escape the Maze" 
             description="Train the RL agent to find the green Goal while avoiding the red Traps."
@@ -236,40 +262,15 @@ const RLLab = () => {
               { label: 'Agent optimizes the path', completed: isOptimized, hint: 'Watch the blue arrows (Q-values) form a direct path' }
             ]}
           />
-
-          <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/50 rounded-xl p-5 shadow-lg flex flex-col justify-center">
-             <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-slate-900 p-3 rounded border border-slate-700">
-                  <div className="text-xs text-slate-400 mb-1">Episodes</div>
-                  <div className="text-xl font-mono text-slate-200">{episodes}</div>
-                </div>
-                <div className="bg-slate-900 p-3 rounded border border-slate-700">
-                  <div className="text-xs text-slate-400 mb-1">Exploration Rate (ε)</div>
-                  <div className="text-xl font-mono text-blue-400">{epsilon.toFixed(2)}</div>
-                </div>
-             </div>
-             
-             <button 
-               onClick={() => setTraining(!training)}
-               className={`w-full py-3 rounded transition-colors text-sm font-bold uppercase tracking-wider ${training ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
-             >
-               {training ? 'Pause Training' : 'Start Training'}
-             </button>
-          </div>
         </div>
 
-        {/* Canvas */}
-        <div className="flex-1 bg-slate-950 border border-slate-700/50 rounded-xl overflow-hidden shadow-inner">
-          <SimulationCanvas draw={draw} update={update} width={800} height={600} className="w-full h-full object-contain" />
-        </div>
+        {/* Theory Panel */}
+        <TheoryPanel 
+          title="Q-Learning" 
+          description="Understand how AI learns to master games and robotics by optimizing for long-term rewards."
+          sections={theorySections} 
+        />
       </div>
-
-      {/* Theory Panel */}
-      <TheoryPanel 
-        title="Q-Learning" 
-        description="Understand how AI learns to master games and robotics by optimizing for long-term rewards."
-        sections={theorySections} 
-      />
     </div>
   );
 };

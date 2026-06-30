@@ -207,10 +207,58 @@ const ImitationLab = () => {
       onKeyUp={handleKeyUp}
     >
       {/* Simulation Area */}
-      <div className="flex-1 flex flex-col p-6 gap-6">
+      <div className="flex-1 bg-slate-950 relative min-w-0 min-h-0 overflow-hidden">
+        <SimulationCanvas draw={draw} update={update} width={800} height={600} className="w-full h-full object-contain" />
         
-        {/* Top bar with Exercise & Controls */}
-        <div className="grid grid-cols-2 gap-6 h-64 shrink-0">
+        {mode === 'human' && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-800/80 backdrop-blur-sm px-4 py-2 rounded-full text-sm text-slate-300 pointer-events-none border border-slate-700/50 animate-pulse shadow-lg">
+            Click here & use ⬅️ and ➡️ keys to steer
+          </div>
+        )}
+      </div>
+
+      {/* Scrollable Right Sidebar */}
+      <div className="w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-l border-slate-700/50 overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+        
+        {/* Controls Section */}
+        <div className="p-5 border-b border-slate-700/50 bg-slate-800/60 shadow-inner">
+           <div className="flex justify-between items-center mb-4">
+              <span className="font-semibold text-slate-200">Current Mode:</span>
+              <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
+                mode === 'human' ? 'bg-blue-500/20 text-blue-400' : 
+                mode === 'training' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'
+              }`}>
+                {mode}
+              </span>
+           </div>
+           
+           <div className="space-y-3">
+             <button 
+               onClick={() => {
+                 stateRef.current.crashed = false;
+                 stateRef.current.carX = 400;
+                 stateRef.current.angle = 0;
+                 stateRef.current.dataset = [];
+                 setDataCount(0);
+                 setMode('human');
+               }}
+               className="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded transition-colors text-sm font-semibold"
+             >
+               Reset & Collect Data
+             </button>
+             
+             <button 
+               onClick={() => setMode('training')}
+               disabled={dataCount < 10}
+               className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors text-sm font-semibold"
+             >
+               Train Network
+             </button>
+           </div>
+        </div>
+
+        {/* Exercise Tracker */}
+        <div className="border-b border-slate-700/50">
           <ExerciseTracker 
             title="Exercise: Teach the Car" 
             description="Use the Left and Right arrow keys to keep the car on the road. The Neural Network will record your actions."
@@ -220,62 +268,15 @@ const ImitationLab = () => {
               { label: 'Watch it drive autonomously', completed: mode === 'auto' && !stateRef.current.crashed, hint: stateRef.current.crashed ? 'Crashed! Reset and collect better data.' : '' }
             ]}
           />
-
-          <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/50 rounded-xl p-5 shadow-lg flex flex-col justify-center">
-             <div className="flex justify-between items-center mb-4">
-                <span className="font-semibold text-slate-200">Current Mode:</span>
-                <span className={`px-3 py-1 rounded text-sm font-bold uppercase ${
-                  mode === 'human' ? 'bg-blue-500/20 text-blue-400' : 
-                  mode === 'training' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'
-                }`}>
-                  {mode}
-                </span>
-             </div>
-             
-             <div className="space-y-3">
-               <button 
-                 onClick={() => {
-                   stateRef.current.crashed = false;
-                   stateRef.current.carX = 400;
-                   stateRef.current.angle = 0;
-                   stateRef.current.dataset = [];
-                   setDataCount(0);
-                   setMode('human');
-                 }}
-                 className="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded transition-colors text-sm font-semibold"
-               >
-                 Reset & Collect Data
-               </button>
-               
-               <button 
-                 onClick={() => setMode('training')}
-                 disabled={dataCount < 10}
-                 className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors text-sm font-semibold"
-               >
-                 Train Network
-               </button>
-             </div>
-          </div>
         </div>
 
-        {/* Canvas */}
-        <div className="flex-1 bg-slate-950 border border-slate-700/50 rounded-xl overflow-hidden relative shadow-inner">
-          <SimulationCanvas draw={draw} update={update} width={800} height={600} className="w-full h-full object-cover" />
-          
-          {mode === 'human' && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-800/80 backdrop-blur-sm px-4 py-2 rounded-full text-sm text-slate-300 pointer-events-none border border-slate-700/50 animate-pulse">
-              Click here & use ⬅️ and ➡️ keys to steer
-            </div>
-          )}
-        </div>
+        {/* Theory Panel */}
+        <TheoryPanel 
+          title="Imitation Learning" 
+          description="Explore how robots can learn complex behaviors simply by observing human experts."
+          sections={theorySections} 
+        />
       </div>
-
-      {/* Theory Panel */}
-      <TheoryPanel 
-        title="Imitation Learning" 
-        description="Explore how robots can learn complex behaviors simply by observing human experts."
-        sections={theorySections} 
-      />
     </div>
   );
 };

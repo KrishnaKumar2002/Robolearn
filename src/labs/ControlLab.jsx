@@ -211,62 +211,64 @@ const ControlLab = () => {
     <div className="flex h-full w-full bg-slate-900 overflow-hidden">
       
       {/* Simulation Area */}
-      <div className="flex-1 flex flex-col p-6 gap-6">
-        
-        {/* Top bar with Exercise & Controls */}
-        <div className="grid grid-cols-2 gap-6 h-64 shrink-0">
-          <ExerciseTracker 
-            title="Exercise: Stable Hover" 
-            description="Tune the PID values so the drone reaches the green target line without oscillating out of control."
-            tasks={[
-              { label: 'Set Kp > 0 to enable spring-like pull', completed: kp > 0, hint: 'Start with Kp = 3.0' },
-              { label: 'Set Kd > 0 to dampen the oscillations', completed: kd > 0, hint: 'Start with Kd = 2.0' },
-              { label: 'Hover stably at the target for 3 seconds', completed: exercisePassed, hint: timeAtTarget > 0 ? `Stable for ${timeAtTarget.toFixed(1)}s...` : 'Drone must stay still at the target' }
-            ]}
-          />
+      <div className="flex-1 bg-slate-950 relative min-w-0 min-h-0 overflow-hidden cursor-crosshair" onClick={handleCanvasClick}>
+        <SimulationCanvas draw={draw} update={update} width={1200} height={800} className="w-full h-full object-contain" />
+        <div className="absolute top-4 left-4 bg-slate-800/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-xs text-slate-300 pointer-events-none border border-slate-700/50 shadow-lg">
+          Click anywhere to move the target altitude
+        </div>
+      </div>
 
-          <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/50 rounded-xl p-5 shadow-lg flex flex-col justify-center">
-            <div className="space-y-5">
-              <div>
-                <label className="flex justify-between text-sm mb-2">
-                  <span className="font-semibold text-slate-200">Proportional (Kp)</span>
-                  <span className="text-blue-400 font-mono bg-blue-400/10 px-2 py-0.5 rounded">{kp.toFixed(1)}</span>
-                </label>
-                <input type="range" min="0" max="10" step="0.1" value={kp} onChange={e => setKp(parseFloat(e.target.value))} className="w-full accent-blue-500" />
-              </div>
-              <div>
-                <label className="flex justify-between text-sm mb-2">
-                  <span className="font-semibold text-slate-200">Derivative (Kd)</span>
-                  <span className="text-emerald-400 font-mono bg-emerald-400/10 px-2 py-0.5 rounded">{kd.toFixed(1)}</span>
-                </label>
-                <input type="range" min="0" max="10" step="0.1" value={kd} onChange={e => setKd(parseFloat(e.target.value))} className="w-full accent-emerald-500" />
-              </div>
-              <div>
-                <label className="flex justify-between text-sm mb-2">
-                  <span className="font-semibold text-slate-200">Integral (Ki)</span>
-                  <span className="text-purple-400 font-mono bg-purple-400/10 px-2 py-0.5 rounded">{ki.toFixed(2)}</span>
-                </label>
-                <input type="range" min="0" max="2" step="0.01" value={ki} onChange={e => setKi(parseFloat(e.target.value))} className="w-full accent-purple-500" />
-              </div>
+      {/* Scrollable Right Sidebar */}
+      <div className="w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-l border-slate-700/50 overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+        
+        {/* Controls Section */}
+        <div className="p-5 border-b border-slate-700/50 bg-slate-800/60 shadow-inner">
+          <h3 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wider">PID Parameters</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="flex justify-between text-xs mb-1.5">
+                <span className="font-semibold text-slate-200">Proportional (Kp)</span>
+                <span className="text-blue-400 font-mono bg-blue-400/10 px-1.5 rounded">{kp.toFixed(1)}</span>
+              </label>
+              <input type="range" min="0" max="10" step="0.1" value={kp} onChange={e => setKp(parseFloat(e.target.value))} className="w-full accent-blue-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" />
+            </div>
+            <div>
+              <label className="flex justify-between text-xs mb-1.5">
+                <span className="font-semibold text-slate-200">Derivative (Kd)</span>
+                <span className="text-emerald-400 font-mono bg-emerald-400/10 px-1.5 rounded">{kd.toFixed(1)}</span>
+              </label>
+              <input type="range" min="0" max="10" step="0.1" value={kd} onChange={e => setKd(parseFloat(e.target.value))} className="w-full accent-emerald-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" />
+            </div>
+            <div>
+              <label className="flex justify-between text-xs mb-1.5">
+                <span className="font-semibold text-slate-200">Integral (Ki)</span>
+                <span className="text-purple-400 font-mono bg-purple-400/10 px-1.5 rounded">{ki.toFixed(2)}</span>
+              </label>
+              <input type="range" min="0" max="2" step="0.01" value={ki} onChange={e => setKi(parseFloat(e.target.value))} className="w-full accent-purple-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" />
             </div>
           </div>
         </div>
 
-        {/* Canvas */}
-        <div className="flex-1 bg-slate-950 border border-slate-700/50 rounded-xl overflow-hidden relative shadow-inner cursor-crosshair" onClick={handleCanvasClick}>
-          <SimulationCanvas draw={draw} update={update} width={1200} height={600} className="w-full h-full object-cover" />
-          <div className="absolute top-4 left-4 bg-slate-800/80 backdrop-blur-sm px-3 py-1.5 rounded-md text-xs text-slate-300 pointer-events-none border border-slate-700/50">
-            Click anywhere to move the target altitude
-          </div>
+        {/* Exercise Tracker */}
+        <div className="border-b border-slate-700/50">
+          <ExerciseTracker 
+            title="Exercise: Stable Hover" 
+            description="Tune the PID values so the drone reaches the green target line without oscillating out of control."
+            tasks={[
+              { label: 'Set Kp > 0 for spring pull', completed: kp > 0, hint: 'Start with Kp = 3.0' },
+              { label: 'Set Kd > 0 to dampen oscillations', completed: kd > 0, hint: 'Start with Kd = 2.0' },
+              { label: 'Hover stably for 3s', completed: exercisePassed, hint: timeAtTarget > 0 ? `Stable for ${timeAtTarget.toFixed(1)}s...` : 'Drone must stay still' }
+            ]}
+          />
         </div>
-      </div>
 
-      {/* Theory Panel */}
-      <TheoryPanel 
-        title="PID Control" 
-        description="Learn how autonomous robots maintain stability and reach their targets smoothly without crashing."
-        sections={theorySections} 
-      />
+        {/* Theory Panel */}
+        <TheoryPanel 
+          title="PID Control" 
+          description="Learn how autonomous robots maintain stability and reach their targets smoothly without crashing."
+          sections={theorySections} 
+        />
+      </div>
     </div>
   );
 };
