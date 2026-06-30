@@ -13,6 +13,8 @@ const ImitationLab = () => {
   const [hasCollectedData, setHasCollectedData] = useState(false);
   const [hasTrained, setHasTrained] = useState(false);
 
+  const containerRef = useRef(null);
+
   const stateRef = useRef({
     carX: 400,
     carY: 500,
@@ -169,6 +171,7 @@ const ImitationLab = () => {
 
   return (
     <div 
+      ref={containerRef}
       className="flex flex-col xl:flex-row h-full w-full bg-slate-900 overflow-y-auto xl:overflow-hidden outline-none" 
       tabIndex="0" 
       onKeyDown={handleKeyDown} 
@@ -223,9 +226,36 @@ const ImitationLab = () => {
           </div>
         </div>
 
-        {/* Controls Section */}
+        {/* Mission Control Section */}
         <div className="p-5 border-b border-slate-700/50 bg-slate-800/60 shadow-inner">
            <h3 className="text-xs font-semibold text-slate-400 mb-4 uppercase tracking-wider">Mission Control</h3>
+           
+           {/* Steering Buttons */}
+           <div className="flex space-x-2 mb-4">
+             <button 
+               onMouseDown={() => keys.current['ArrowLeft'] = true}
+               onMouseUp={() => keys.current['ArrowLeft'] = false}
+               onMouseLeave={() => keys.current['ArrowLeft'] = false}
+               onTouchStart={() => keys.current['ArrowLeft'] = true}
+               onTouchEnd={() => keys.current['ArrowLeft'] = false}
+               disabled={mode !== 'human'}
+               className="flex-1 py-4 bg-slate-700 hover:bg-slate-600 active:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-2xl shadow-md select-none"
+             >
+               ⬅️
+             </button>
+             <button 
+               onMouseDown={() => keys.current['ArrowRight'] = true}
+               onMouseUp={() => keys.current['ArrowRight'] = false}
+               onMouseLeave={() => keys.current['ArrowRight'] = false}
+               onTouchStart={() => keys.current['ArrowRight'] = true}
+               onTouchEnd={() => keys.current['ArrowRight'] = false}
+               disabled={mode !== 'human'}
+               className="flex-1 py-4 bg-slate-700 hover:bg-slate-600 active:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-2xl shadow-md select-none"
+             >
+               ➡️
+             </button>
+           </div>
+
            <div className="space-y-3">
              <button 
                onClick={() => {
@@ -235,6 +265,7 @@ const ImitationLab = () => {
                  stateRef.current.dataset = [];
                  setDataCount(0);
                  setMode('human');
+                 if (containerRef.current) containerRef.current.focus();
                }}
                className="w-full py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-sm font-semibold shadow-md"
              >
