@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import SimulationCanvas from '../components/SimulationCanvas';
 import TheoryPanel from '../components/TheoryPanel';
 import ExerciseTracker from '../components/ExerciseTracker';
-import { SimpleNN } from '../utils/nn';
+import { NeuralNetwork } from '../utils/nn';
 import { clamp } from '../utils/math';
 
 const theorySections = [
@@ -52,7 +52,7 @@ const ImitationLab = () => {
     angle: 0,
     trackWidth: 200,
     dataset: [],
-    nn: new SimpleNN(2, 8, 3), // 2 inputs (left_dist, right_dist), 8 hidden, 3 outputs (left, straight, right)
+    nn: new NeuralNetwork(2, 8, 3), // 2 inputs (left_dist, right_dist), 8 hidden, 3 outputs (left, straight, right)
     trainingEpochs: 0,
     crashed: false
   });
