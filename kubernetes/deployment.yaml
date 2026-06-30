@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: robolearn-explorer
+  labels:
+    app: robolearn-explorer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: robolearn-explorer
+  template:
+    metadata:
+      labels:
+        app: robolearn-explorer
+    spec:
+      containers:
+      - name: robolearn-explorer
+        image: robolearn-explorer:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
