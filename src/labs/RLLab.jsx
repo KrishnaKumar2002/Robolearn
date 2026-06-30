@@ -1,247 +1,275 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import SimulationCanvas from '../components/SimulationCanvas';
+import TheoryPanel from '../components/TheoryPanel';
+import ExerciseTracker from '../components/ExerciseTracker';
 
-const L1 = 100;
-const L2 = 100;
-const ACTIONS = [
-  { d1: 10, d2: 0 },
-  { d1: -10, d2: 0 },
-  { d1: 0, d2: 10 },
-  { d1: 0, d2: -10 }
+const theorySections = [
+  {
+    icon: 'info',
+    title: 'Reinforcement Learning',
+    content: <p>Instead of being told what to do (like in Imitation Learning), an RL agent learns by <strong>Trial and Error</strong>. It explores an environment, takes actions, and receives <em>Rewards</em> or <em>Penalties</em>.</p>
+  },
+  {
+    icon: 'lightbulb',
+    title: 'The Q-Table',
+    content: (
+      <div className="space-y-2">
+        <p>The agent maintains a "cheat sheet" called a <strong>Q-Table</strong>. For every state (grid cell) and action (up, down, left, right), it stores a "Q-value" representing the expected long-term reward.</p>
+      </div>
+    )
+  },
+  {
+    icon: 'lightbulb',
+    title: 'The Bellman Equation',
+    content: (
+      <div className="space-y-2">
+        <p>When the agent moves from State A to State B and gets a reward, it updates the Q-value of State A using the Bellman Equation:</p>
+        <div className="p-3 bg-slate-900 rounded font-mono text-xs text-blue-400">
+          Q(s,a) = Q(s,a) + α * (Reward + γ * MaxQ(s') - Q(s,a))
+        </div>
+        <ul className="list-disc pl-4 text-slate-400 text-xs mt-2">
+          <li><strong>α (Alpha):</strong> Learning Rate</li>
+          <li><strong>γ (Gamma):</strong> Discount Factor (values future rewards)</li>
+        </ul>
+      </div>
+    )
+  },
+  {
+    icon: 'play',
+    title: 'Exploration vs Exploitation',
+    content: <p>Early on, the agent moves randomly (Exploration) to discover the map. Later, it follows the Q-Table (Exploitation) to take the best known path to the goal.</p>
+  }
+];
+
+// Grid World: 0 = empty, 1 = wall, 2 = goal, 3 = trap
+const GRID_SIZE = 10;
+const MAP = [
+  [0, 0, 0, 0, 0, 1, 0, 0, 0, 2],
+  [0, 1, 1, 0, 0, 1, 0, 1, 0, 0],
+  [0, 0, 1, 0, 0, 0, 0, 1, 1, 0],
+  [1, 0, 1, 1, 1, 3, 1, 1, 0, 0],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [0, 1, 1, 1, 0, 1, 1, 1, 1, 0],
+  [0, 0, 0, 1, 0, 0, 0, 3, 1, 0],
+  [1, 1, 0, 1, 1, 1, 0, 0, 1, 0],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 ];
 
 const RLLab = () => {
   const [training, setTraining] = useState(false);
-  const [episode, setEpisode] = useState(0);
-  const [epsilon, setEpsilon] = useState(1.0);
+  const [episodes, setEpisodes] = useState(0);
+  const [epsilon, setEpsilon] = useState(1.0); // Exploration rate
   
-  // Q-Table: [theta1][theta2][action]
-  const qTable = useRef(new Float32Array(36 * 36 * 4));
-  
+  const [hasExplored, setHasExplored] = useState(false);
+  const [hasFoundGoal, setHasFoundGoal] = useState(false);
+  const [isOptimized, setIsOptimized] = useState(false);
+
+  const qTable = useRef(new Float32Array(GRID_SIZE * GRID_SIZE * 4)); 
   const stateRef = useRef({
-    theta1: 45,
-    theta2: 45,
-    targetX: 100,
-    targetY: 100,
+    agentX: 0,
+    agentY: 9,
     steps: 0,
-    totalReward: 0,
-    rewards: []
+    history: []
   });
 
-  const getForwardKinematics = (t1, t2) => {
-    const r1 = t1 * Math.PI / 180;
-    const r2 = (t1 + t2) * Math.PI / 180;
-    const x1 = Math.cos(r1) * L1;
-    const y1 = Math.sin(r1) * L1;
-    const x2 = x1 + Math.cos(r2) * L2;
-    const y2 = y1 + Math.sin(r2) * L2;
-    return { x1, y1, x2, y2 };
-  };
-
-  const getStateIndex = (t1, t2) => {
-    const i1 = Math.floor((t1 % 360 + 360) % 360 / 10);
-    const i2 = Math.floor((t2 % 360 + 360) % 360 / 10);
-    return i1 * 36 + i2;
-  };
-
-  const getQ = (sIdx, aIdx) => qTable.current[sIdx * 4 + aIdx];
-  const setQ = (sIdx, aIdx, val) => { qTable.current[sIdx * 4 + aIdx] = val; };
+  const getQ = (x, y, a) => qTable.current[(y * GRID_SIZE + x) * 4 + a];
+  const setQ = (x, y, a, val) => { qTable.current[(y * GRID_SIZE + x) * 4 + a] = val; };
 
   const update = useCallback((dt) => {
     if (!training) return;
     
-    // Run multiple steps per frame to speed up training visually
-    for(let i=0; i<10; i++) {
+    for (let i = 0; i < 50; i++) { // Run 50 steps per frame for fast visual training
       const state = stateRef.current;
-      const sIdx = getStateIndex(state.theta1, state.theta2);
-      
-      // Epsilon greedy
-      let actionIdx = 0;
+      const { agentX: x, agentY: y } = state;
+
+      // Epsilon-greedy action selection
+      let action = 0;
       if (Math.random() < epsilon) {
-        actionIdx = Math.floor(Math.random() * 4);
+        action = Math.floor(Math.random() * 4); // Explore
       } else {
+        // Exploit
         let maxQ = -Infinity;
-        for(let a=0; a<4; a++) {
-          const q = getQ(sIdx, a);
-          if(q > maxQ) { maxQ = q; actionIdx = a; }
+        for (let a = 0; a < 4; a++) {
+          const q = getQ(x, y, a);
+          if (q > maxQ) { maxQ = q; action = a; }
         }
       }
 
-      // Take action
-      const action = ACTIONS[actionIdx];
-      let nt1 = state.theta1 + action.d1;
-      let nt2 = state.theta2 + action.d2;
-      nt1 = (nt1 + 360) % 360;
-      nt2 = (nt2 + 360) % 360;
+      // 0: up, 1: right, 2: down, 3: left
+      let nx = x, ny = y;
+      if (action === 0) ny -= 1;
+      if (action === 1) nx += 1;
+      if (action === 2) ny += 1;
+      if (action === 3) nx -= 1;
 
-      // Observe reward
-      const fk = getForwardKinematics(nt1, nt2);
-      const dx = fk.x2 - state.targetX;
-      const dy = fk.y2 - state.targetY;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      
-      let reward = -1; // step penalty
+      // Bounds & Walls
+      if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE || MAP[ny][nx] === 1) {
+        nx = x; ny = y;
+      }
+
+      // Rewards
+      const cell = MAP[ny][nx];
+      let reward = -0.01; // Step penalty
       let done = false;
-      if (dist < 20) {
-        reward = 100;
+
+      if (cell === 2) {
+        reward = 1.0; // Goal
+        done = true;
+        setHasFoundGoal(true);
+      } else if (cell === 3) {
+        reward = -1.0; // Trap
         done = true;
       }
 
-      // Update Q
-      const nsIdx = getStateIndex(nt1, nt2);
-      let maxNQ = -Infinity;
-      for(let a=0; a<4; a++) {
-        const q = getQ(nsIdx, a);
-        if(q > maxNQ) maxNQ = q;
+      // Bellman update
+      let maxNextQ = -Infinity;
+      for (let a = 0; a < 4; a++) {
+        const q = getQ(nx, ny, a);
+        if (q > maxNextQ) maxNextQ = q;
       }
-      
-      const currentQ = getQ(sIdx, actionIdx);
-      const alpha = 0.1;
-      const gamma = 0.99;
-      setQ(sIdx, actionIdx, currentQ + alpha * (reward + gamma * maxNQ - currentQ));
 
-      state.theta1 = nt1;
-      state.theta2 = nt2;
-      state.totalReward += reward;
+      const currentQ = getQ(x, y, action);
+      const newQ = currentQ + 0.1 * (reward + 0.99 * maxNextQ - currentQ);
+      setQ(x, y, action, newQ);
+
+      state.agentX = nx;
+      state.agentY = ny;
       state.steps++;
-
+      
       if (done || state.steps > 200) {
-        state.rewards.push(state.totalReward);
-        if(state.rewards.length > 50) state.rewards.shift();
+        state.agentX = 0;
+        state.agentY = 9;
         
-        state.theta1 = Math.random() * 360;
-        state.theta2 = Math.random() * 360;
+        if (cell === 2 && state.steps < 20) {
+           setIsOptimized(true);
+        }
+        
         state.steps = 0;
-        state.totalReward = 0;
-        setEpisode(e => e + 1);
-        setEpsilon(e => Math.max(0.05, e * 0.995)); // Decay epsilon
+        setEpisodes(ep => {
+          const newEp = ep + 1;
+          setEpsilon(Math.max(0.01, 1.0 - newEp / 500));
+          if (newEp > 100) setHasExplored(true);
+          return newEp;
+        });
       }
     }
   }, [training, epsilon]);
 
   const draw = useCallback((ctx, width, height) => {
-    const state = stateRef.current;
-    const cx = width / 2;
-    const cy = height / 2;
+    const cellSize = Math.min(width, height) / GRID_SIZE;
+    const offsetX = (width - cellSize * GRID_SIZE) / 2;
+    const offsetY = (height - cellSize * GRID_SIZE) / 2;
 
-    const { x1, y1, x2, y2 } = getForwardKinematics(state.theta1, state.theta2);
+    ctx.translate(offsetX, offsetY);
 
-    // Draw Target
-    ctx.fillStyle = '#ef4444'; // red-500
-    ctx.beginPath();
-    ctx.arc(cx + state.targetX, cy - state.targetY, 15, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw Map & Q-Values
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const cell = MAP[y][x];
+        const px = x * cellSize;
+        const py = y * cellSize;
 
-    // Draw Arm
-    ctx.strokeStyle = '#cbd5e1'; // slate-300
-    ctx.lineWidth = 10;
-    ctx.lineCap = 'round';
-    
-    // Link 1
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + x1, cy - y1);
-    ctx.stroke();
+        // Background
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(px, py, cellSize, cellSize);
 
-    // Link 2
-    ctx.strokeStyle = '#94a3b8'; // slate-400
-    ctx.beginPath();
-    ctx.moveTo(cx + x1, cy - y1);
-    ctx.lineTo(cx + x2, cy - y2);
-    ctx.stroke();
-
-    // Joints
-    ctx.fillStyle = '#334155'; // slate-700
-    ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + x1, cy - y1, 8, 0, Math.PI*2); ctx.fill();
-    
-    // End effector
-    ctx.fillStyle = '#3b82f6'; // blue-500
-    ctx.beginPath(); ctx.arc(cx + x2, cy - y2, 8, 0, Math.PI*2); ctx.fill();
-
-    // Draw Chart
-    if (state.rewards.length > 0) {
-      ctx.strokeStyle = '#22c55e';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      const chartX = 20, chartY = height - 100, chartW = 200, chartH = 80;
-      ctx.strokeRect(chartX, chartY, chartW, chartH);
-      
-      const maxR = Math.max(...state.rewards, 100);
-      const minR = Math.min(...state.rewards, -200);
-      
-      state.rewards.forEach((r, i) => {
-        const x = chartX + (i / 50) * chartW;
-        const y = chartY + chartH - ((r - minR) / (maxR - minR)) * chartH;
-        if (i===0) ctx.moveTo(x,y);
-        else ctx.lineTo(x,y);
-      });
-      ctx.stroke();
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '12px sans-serif';
-      ctx.fillText('Reward over last 50 episodes', chartX, chartY - 5);
+        if (cell === 1) { // Wall
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
+        } else if (cell === 2) { // Goal
+          ctx.fillStyle = '#22c55e'; // green
+          ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
+        } else if (cell === 3) { // Trap
+          ctx.fillStyle = '#ef4444'; // red
+          ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
+        } else {
+          // Draw Q-value heatmap arrows
+          let maxQ = -Infinity, bestA = 0;
+          for (let a=0; a<4; a++) {
+            const q = getQ(x, y, a);
+            if (q > maxQ) { maxQ = q; bestA = a; }
+          }
+          if (maxQ > 0.01) {
+            ctx.fillStyle = `rgba(56, 189, 248, ${Math.min(maxQ * 2, 1)})`;
+            ctx.beginPath();
+            const cx = px + cellSize/2;
+            const cy = py + cellSize/2;
+            const arrSize = cellSize/4;
+            if (bestA === 0) { ctx.moveTo(cx, cy - arrSize); ctx.lineTo(cx - arrSize/2, cy); ctx.lineTo(cx + arrSize/2, cy); }
+            if (bestA === 1) { ctx.moveTo(cx + arrSize, cy); ctx.lineTo(cx, cy - arrSize/2); ctx.lineTo(cx, cy + arrSize/2); }
+            if (bestA === 2) { ctx.moveTo(cx, cy + arrSize); ctx.lineTo(cx - arrSize/2, cy); ctx.lineTo(cx + arrSize/2, cy); }
+            if (bestA === 3) { ctx.moveTo(cx - arrSize, cy); ctx.lineTo(cx, cy - arrSize/2); ctx.lineTo(cx, cy + arrSize/2); }
+            ctx.fill();
+          }
+        }
+        
+        ctx.strokeStyle = '#334155';
+        ctx.strokeRect(px, py, cellSize, cellSize);
+      }
     }
 
+    // Draw Agent
+    const state = stateRef.current;
+    ctx.fillStyle = '#eab308'; // yellow
+    ctx.beginPath();
+    ctx.arc(state.agentX * cellSize + cellSize/2, state.agentY * cellSize + cellSize/2, cellSize/3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.translate(-offsetX, -offsetY);
   }, []);
 
-  const handleCanvasClick = (e) => {
-    const rect = e.target.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width/2;
-    const y = rect.height/2 - (e.clientY - rect.top);
-    stateRef.current.targetX = x;
-    stateRef.current.targetY = y;
-  };
-
   return (
-    <div className="flex h-full gap-4">
-      <div className="flex-1 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden relative" onClick={handleCanvasClick}>
-        <SimulationCanvas draw={draw} update={update} width={800} height={600} className="w-full h-full object-contain cursor-crosshair" />
-        <div className="absolute top-4 left-4 bg-slate-800/80 p-2 rounded text-xs pointer-events-none">
-          Click anywhere to move the target
-        </div>
-      </div>
+    <div className="flex h-full w-full bg-slate-900 overflow-hidden">
       
-      <div className="w-80 bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col gap-4">
-        <h3 className="font-bold text-lg border-b border-slate-700 pb-2">Q-Learning</h3>
+      {/* Simulation Area */}
+      <div className="flex-1 flex flex-col p-6 gap-6">
         
-        <div className="space-y-4">
-          <div className="bg-slate-900 p-3 rounded border border-slate-700">
-            <div className="text-xs text-slate-400 mb-1">Episode</div>
-            <div className="text-2xl font-mono text-blue-400">{episode}</div>
-          </div>
+        {/* Top bar with Exercise & Controls */}
+        <div className="grid grid-cols-2 gap-6 h-64 shrink-0">
+          <ExerciseTracker 
+            title="Exercise: Escape the Maze" 
+            description="Train the RL agent to find the green Goal while avoiding the red Traps."
+            tasks={[
+              { label: 'Start Training (Exploration)', completed: hasExplored, hint: 'Let the agent run for ~100 episodes' },
+              { label: 'Agent discovers the Goal', completed: hasFoundGoal, hint: 'The agent will eventually stumble upon it' },
+              { label: 'Agent optimizes the path', completed: isOptimized, hint: 'Watch the blue arrows (Q-values) form a direct path' }
+            ]}
+          />
 
-          <div className="bg-slate-900 p-3 rounded border border-slate-700">
-            <div className="text-xs text-slate-400 mb-1">Exploration Rate (ε)</div>
-            <div className="text-2xl font-mono text-purple-400">{epsilon.toFixed(3)}</div>
-          </div>
-
-          <div className="text-sm text-slate-300">
-            <p className="mb-2"><strong>State:</strong> (θ₁, θ₂)</p>
-            <p className="mb-2"><strong>Actions:</strong> ±10° on each joint</p>
-            <p><strong>Reward:</strong> +100 at target, -1 per step</p>
+          <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/50 rounded-xl p-5 shadow-lg flex flex-col justify-center">
+             <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-slate-900 p-3 rounded border border-slate-700">
+                  <div className="text-xs text-slate-400 mb-1">Episodes</div>
+                  <div className="text-xl font-mono text-slate-200">{episodes}</div>
+                </div>
+                <div className="bg-slate-900 p-3 rounded border border-slate-700">
+                  <div className="text-xs text-slate-400 mb-1">Exploration Rate (ε)</div>
+                  <div className="text-xl font-mono text-blue-400">{epsilon.toFixed(2)}</div>
+                </div>
+             </div>
+             
+             <button 
+               onClick={() => setTraining(!training)}
+               className={`w-full py-3 rounded transition-colors text-sm font-bold uppercase tracking-wider ${training ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+             >
+               {training ? 'Pause Training' : 'Start Training'}
+             </button>
           </div>
         </div>
 
-        <div className="mt-auto pt-4 border-t border-slate-700 flex gap-2">
-          <button 
-            onClick={() => setTraining(!training)}
-            className={`flex-1 py-2 rounded transition-colors text-sm font-semibold ${training ? 'bg-red-600 hover:bg-red-500' : 'bg-green-600 hover:bg-green-500'}`}
-          >
-            {training ? 'Pause' : 'Train Agent'}
-          </button>
-          <button 
-            onClick={() => {
-              qTable.current.fill(0);
-              setEpisode(0);
-              setEpsilon(1.0);
-              stateRef.current.rewards = [];
-            }}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded transition-colors text-sm font-semibold"
-          >
-            Reset
-          </button>
+        {/* Canvas */}
+        <div className="flex-1 bg-slate-950 border border-slate-700/50 rounded-xl overflow-hidden shadow-inner">
+          <SimulationCanvas draw={draw} update={update} width={800} height={600} className="w-full h-full object-contain" />
         </div>
       </div>
+
+      {/* Theory Panel */}
+      <TheoryPanel 
+        title="Q-Learning" 
+        description="Understand how AI learns to master games and robotics by optimizing for long-term rewards."
+        sections={theorySections} 
+      />
     </div>
   );
 };

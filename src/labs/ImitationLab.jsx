@@ -1,121 +1,146 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import SimulationCanvas from '../components/SimulationCanvas';
-import { NeuralNetwork } from '../utils/nn';
+import TheoryPanel from '../components/TheoryPanel';
+import ExerciseTracker from '../components/ExerciseTracker';
+import { SimpleNN } from '../utils/nn';
+import { clamp } from '../utils/math';
 
-// Actions: 0 = straight, 1 = left, 2 = right
+const theorySections = [
+  {
+    icon: 'info',
+    title: 'Supervised Learning',
+    content: <p>In Imitation Learning, we train a neural network to mimic a human expert. The network learns a mapping from <strong>States</strong> (what the robot sees) to <strong>Actions</strong> (what the robot should do).</p>
+  },
+  {
+    icon: 'lightbulb',
+    title: 'Data Collection',
+    content: (
+      <div className="space-y-2">
+        <p>First, a human drives the car. We record pairs of <code>(State, Action)</code>.</p>
+        <ul className="list-disc pl-4 text-slate-400 space-y-1">
+          <li><strong>State:</strong> Distance to the left and right walls.</li>
+          <li><strong>Action:</strong> Steer left, right, or go straight.</li>
+        </ul>
+      </div>
+    )
+  },
+  {
+    icon: 'lightbulb',
+    title: 'Training the Network',
+    content: <p>We use <strong>Gradient Descent</strong> to adjust the network's weights. The <em>Loss</em> measures the difference between the network's predicted action and the human's actual action. Over time, the loss decreases and the network "learns" to drive.</p>
+  },
+  {
+    icon: 'play',
+    title: 'Autonomous Mode',
+    content: <p>Once trained, we hand over control to the neural network. It looks at the current distances to the walls and outputs the best action to avoid crashing.</p>
+  }
+];
+
 const ImitationLab = () => {
-  const [mode, setMode] = useState('human'); // human, training, auto
-  const [datasetSize, setDatasetSize] = useState(0);
-  const [loss, setLoss] = useState(0);
+  const [mode, setMode] = useState('human'); // 'human', 'training', 'auto'
+  const [dataCount, setDataCount] = useState(0);
+  const [loss, setLoss] = useState(1.0);
   
+  // Exercise tracking
+  const [hasCollectedData, setHasCollectedData] = useState(false);
+  const [hasTrained, setHasTrained] = useState(false);
+
   const stateRef = useRef({
-    x: 400, y: 300, angle: 0, velocity: 0,
-    sensors: [0, 0, 0], // left, front, right
-    keys: { ArrowUp: false, ArrowLeft: false, ArrowRight: false },
-    dataset: [], // { state: [..], action: [0,0,1] }
-    nn: new NeuralNetwork(3, 16, 3),
-    track: [
-      { x: 200, y: 150, r: 100 },
-      { x: 600, y: 150, r: 100 },
-      { x: 600, y: 450, r: 100 },
-      { x: 200, y: 450, r: 100 }
-    ] // track nodes
+    carX: 400,
+    carY: 500,
+    velocity: 2,
+    angle: 0,
+    trackWidth: 200,
+    dataset: [],
+    nn: new SimpleNN(2, 8, 3), // 2 inputs (left_dist, right_dist), 8 hidden, 3 outputs (left, straight, right)
+    trainingEpochs: 0,
+    crashed: false
   });
 
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if(stateRef.current.keys.hasOwnProperty(e.code)) stateRef.current.keys[e.code] = true;
-    };
-    const handleKeyUp = (e) => {
-      if(stateRef.current.keys.hasOwnProperty(e.code)) stateRef.current.keys[e.code] = false;
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
+  const keys = useRef({ ArrowLeft: false, ArrowRight: false });
 
-  const getDistanceToTrackEdge = (x, y, dx, dy) => {
-    const state = stateRef.current;
-    let minD = 200; // max distance
-    for(let i=0; i<minD; i+=5) {
-      const px = x + dx * i;
-      const py = y + dy * i;
-      // check if px, py is inside track
-      // track is defined roughly as a thick line connecting nodes
-      let onTrack = false;
-      for(let j=0; j<state.track.length; j++) {
-        const next = state.track[(j+1)%state.track.length];
-        const curr = state.track[j];
-        
-        // distance to line segment
-        const l2 = (next.x - curr.x)**2 + (next.y - curr.y)**2;
-        let t = ((px - curr.x) * (next.x - curr.x) + (py - curr.y) * (next.y - curr.y)) / l2;
-        t = Math.max(0, Math.min(1, t));
-        const projX = curr.x + t * (next.x - curr.x);
-        const projY = curr.y + t * (next.y - curr.y);
-        const distToCenter = Math.sqrt((px - projX)**2 + (py - projY)**2);
-        
-        if (distToCenter < 60) {
-          onTrack = true;
-          break;
-        }
-      }
-      if(!onTrack) return i;
-    }
-    return minD;
+  // Handle keyboard input for human driving
+  const handleKeyDown = (e) => {
+    if (keys.current.hasOwnProperty(e.key)) keys.current[e.key] = true;
+  };
+  const handleKeyUp = (e) => {
+    if (keys.current.hasOwnProperty(e.key)) keys.current[e.key] = false;
   };
 
   const update = useCallback((dt) => {
-    dt = Math.min(dt, 0.05);
     const state = stateRef.current;
+    if (state.crashed) return;
 
-    // Simulate sensors (angles: -45, 0, 45)
-    const angles = [-Math.PI/4, 0, Math.PI/4];
-    for(let i=0; i<3; i++) {
-      const a = state.angle + angles[i];
-      const dx = Math.cos(a);
-      const dy = Math.sin(a);
-      state.sensors[i] = getDistanceToTrackEdge(state.x, state.y, dx, dy) / 200.0;
+    if (mode === 'training') {
+      // Perform one epoch of training per frame
+      if (state.dataset.length === 0) {
+        setMode('human');
+        return;
+      }
+      
+      let totalLoss = 0;
+      // Train on a random mini-batch
+      for (let i = 0; i < 10; i++) {
+        const sample = state.dataset[Math.floor(Math.random() * state.dataset.length)];
+        const err = state.nn.train(sample.state, sample.action);
+        totalLoss += err;
+      }
+      
+      state.trainingEpochs++;
+      const currentLoss = totalLoss / 10;
+      setLoss(currentLoss);
+      
+      if (currentLoss < 0.05 || state.trainingEpochs > 500) {
+        setHasTrained(true);
+        setMode('auto');
+        // Reset car
+        state.carX = 400;
+        state.angle = 0;
+      }
+      return;
     }
 
-    let turn = 0;
-    let throttle = 0;
+    // Physics
+    const leftDist = state.carX - (400 - state.trackWidth / 2);
+    const rightDist = (400 + state.trackWidth / 2) - state.carX;
+    
+    // Normalize state inputs
+    const currentState = [leftDist / state.trackWidth, rightDist / state.trackWidth];
+
+    let action = [0, 1, 0]; // [left, straight, right]
 
     if (mode === 'human') {
-      if (state.keys.ArrowUp) throttle = 1;
-      if (state.keys.ArrowLeft) turn = -1;
-      if (state.keys.ArrowRight) turn = 1;
+      if (keys.current.ArrowLeft) {
+        state.angle -= 0.05;
+        action = [1, 0, 0];
+      } else if (keys.current.ArrowRight) {
+        state.angle += 0.05;
+        action = [0, 0, 1];
+      }
 
-      // Record data if moving
-      if (throttle > 0 && Math.random() < 0.2) { // sample rate
-        let action = [1, 0, 0]; // straight
-        if (turn < 0) action = [0, 1, 0]; // left
-        if (turn > 0) action = [0, 0, 1]; // right
-        state.dataset.push({ state: [...state.sensors], action });
-        setDatasetSize(state.dataset.length);
+      // Collect data periodically
+      if (Math.random() < 0.2) {
+        state.dataset.push({ state: currentState, action });
+        setDataCount(state.dataset.length);
+        if (state.dataset.length >= 100) {
+          setHasCollectedData(true);
+        }
       }
     } else if (mode === 'auto') {
-      throttle = 1; // always drive
-      const probs = state.nn.predict(state.sensors);
-      // argmax
-      let maxI = 0;
-      for(let i=1; i<3; i++) if(probs[i] > probs[maxI]) maxI = i;
-      if (maxI === 1) turn = -1;
-      if (maxI === 2) turn = 1;
+      // Predict action
+      const prediction = state.nn.predict(currentState);
+      const maxIdx = prediction.indexOf(Math.max(...prediction));
+      if (maxIdx === 0) state.angle -= 0.05;
+      else if (maxIdx === 2) state.angle += 0.05;
     }
 
-    state.velocity += (throttle * 150 - state.velocity) * 2 * dt;
-    state.angle += turn * 3 * dt;
-    
-    state.x += Math.cos(state.angle) * state.velocity * dt;
-    state.y += Math.sin(state.angle) * state.velocity * dt;
+    // Move car
+    state.carX += Math.sin(state.angle) * state.velocity * (dt * 60);
+    // Simulate forward movement by just animating track (carY stays fixed)
 
-    // reset if out of bounds deeply
-    if(state.x < 0 || state.x > 800 || state.y < 0 || state.y > 600) {
-      state.x = 400; state.y = 300; state.angle = 0;
+    // Check crash
+    if (state.carX < 400 - state.trackWidth / 2 + 15 || state.carX > 400 + state.trackWidth / 2 - 15) {
+      state.crashed = true;
     }
   }, [mode]);
 
@@ -123,148 +148,134 @@ const ImitationLab = () => {
     const state = stateRef.current;
 
     // Draw track
-    ctx.lineWidth = 120;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#334155'; // track color
+    ctx.fillStyle = '#1e293b'; // slate-800
+    ctx.fillRect(400 - state.trackWidth / 2, 0, state.trackWidth, height);
+    
+    // Draw track borders with glow
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#0ea5e9';
+    ctx.strokeStyle = '#0ea5e9'; // sky-500
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    state.track.forEach((t, i) => {
-      if(i===0) ctx.moveTo(t.x, t.y);
-      else ctx.lineTo(t.x, t.y);
-    });
-    ctx.closePath();
+    ctx.moveTo(400 - state.trackWidth / 2, 0); ctx.lineTo(400 - state.trackWidth / 2, height);
+    ctx.moveTo(400 + state.trackWidth / 2, 0); ctx.lineTo(400 + state.trackWidth / 2, height);
     ctx.stroke();
-
-    // Draw center line
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#f8fafc';
-    ctx.setLineDash([10, 10]);
-    ctx.beginPath();
-    state.track.forEach((t, i) => {
-      if(i===0) ctx.moveTo(t.x, t.y);
-      else ctx.lineTo(t.x, t.y);
-    });
-    ctx.closePath();
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw sensors
-    const angles = [-Math.PI/4, 0, Math.PI/4];
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
-    ctx.lineWidth = 1;
-    for(let i=0; i<3; i++) {
-      const a = state.angle + angles[i];
-      const d = state.sensors[i] * 200;
-      ctx.beginPath();
-      ctx.moveTo(state.x, state.y);
-      ctx.lineTo(state.x + Math.cos(a)*d, state.y + Math.sin(a)*d);
-      ctx.stroke();
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      ctx.arc(state.x + Math.cos(a)*d, state.y + Math.sin(a)*d, 3, 0, Math.PI*2);
-      ctx.fill();
-    }
+    ctx.shadowBlur = 0;
 
     // Draw car
-    ctx.translate(state.x, state.y);
+    ctx.save();
+    ctx.translate(state.carX, state.carY);
     ctx.rotate(state.angle);
-    ctx.fillStyle = '#3b82f6';
-    ctx.fillRect(-10, -6, 20, 12);
-    ctx.fillStyle = '#94a3b8'; // windshield
-    ctx.fillRect(2, -5, 4, 10);
-    ctx.rotate(-state.angle);
-    ctx.translate(-state.x, -state.y);
+    ctx.fillStyle = state.crashed ? '#ef4444' : '#3b82f6'; // red or blue
+    ctx.beginPath();
+    ctx.roundRect(-15, -25, 30, 50, 4);
+    ctx.fill();
+    // Headlights
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.beginPath();
+    ctx.arc(-10, -25, 3, 0, Math.PI * 2);
+    ctx.arc(10, -25, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Draw sensor rays
+    ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)'; // green-500
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(state.carX, state.carY);
+    ctx.lineTo(400 - state.trackWidth / 2, state.carY);
+    ctx.moveTo(state.carX, state.carY);
+    ctx.lineTo(400 + state.trackWidth / 2, state.carY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    if (state.crashed) {
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 32px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('CRASHED!', 400, height / 2);
+      ctx.textAlign = 'left';
+    }
 
   }, []);
 
-  const handleTrain = () => {
-    setMode('training');
-    const state = stateRef.current;
-    if(state.dataset.length === 0) return setMode('human');
-
-    let iter = 0;
-    const interval = setInterval(() => {
-      let epochLoss = 0;
-      for(let i=0; i<50; i++) {
-        const sample = state.dataset[Math.floor(Math.random() * state.dataset.length)];
-        state.nn.train(sample.state, sample.action);
-        
-        // calc approx loss for display
-        const p = state.nn.predict(sample.state);
-        epochLoss += sample.action.reduce((sum, a, idx) => sum + Math.abs(a - p[idx]), 0);
-      }
-      setLoss(epochLoss / 50);
-      
-      iter++;
-      if(iter > 100) {
-        clearInterval(interval);
-        setMode('auto');
-        // Reset car
-        state.x = 200; state.y = 150; state.angle = 0; state.velocity = 0;
-      }
-    }, 20);
-  };
-
   return (
-    <div className="flex h-full gap-4">
-      <div className="flex-1 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden relative">
-        <SimulationCanvas draw={draw} update={update} width={800} height={600} className="w-full h-full object-contain" />
-        <div className="absolute top-4 left-4 bg-slate-800/80 p-2 rounded text-xs pointer-events-none text-slate-300">
-          Mode: <span className="text-white font-bold uppercase">{mode}</span>
-        </div>
-      </div>
-      
-      <div className="w-80 bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col gap-4">
-        <h3 className="font-bold text-lg border-b border-slate-700 pb-2">Learning from Demonstration</h3>
+    <div 
+      className="flex h-full w-full bg-slate-900 overflow-hidden outline-none" 
+      tabIndex="0" 
+      onKeyDown={handleKeyDown} 
+      onKeyUp={handleKeyUp}
+    >
+      {/* Simulation Area */}
+      <div className="flex-1 flex flex-col p-6 gap-6">
         
-        <div className="space-y-4">
-          <p className="text-sm text-slate-300">
-            1. Drive the car using <kbd className="bg-slate-700 p-1 rounded">↑</kbd> <kbd className="bg-slate-700 p-1 rounded">←</kbd> <kbd className="bg-slate-700 p-1 rounded">→</kbd> to collect training data.<br/>
-            2. Click Train to train a Neural Network.<br/>
-            3. Watch it drive autonomously!
-          </p>
+        {/* Top bar with Exercise & Controls */}
+        <div className="grid grid-cols-2 gap-6 h-64 shrink-0">
+          <ExerciseTracker 
+            title="Exercise: Teach the Car" 
+            description="Use the Left and Right arrow keys to keep the car on the road. The Neural Network will record your actions."
+            tasks={[
+              { label: 'Collect 100 data points by driving', completed: hasCollectedData, hint: `Data size: ${dataCount}/100` },
+              { label: 'Train the Neural Network', completed: hasTrained, hint: mode === 'training' ? `Training Loss: ${loss.toFixed(3)}` : 'Click Train when ready' },
+              { label: 'Watch it drive autonomously', completed: mode === 'auto' && !stateRef.current.crashed, hint: stateRef.current.crashed ? 'Crashed! Reset and collect better data.' : '' }
+            ]}
+          />
 
-          <div className="bg-slate-900 p-3 rounded border border-slate-700">
-            <div className="text-xs text-slate-400 mb-1">Collected Data Points</div>
-            <div className="text-2xl font-mono text-blue-400">{datasetSize}</div>
-          </div>
-
-          <div className="bg-slate-900 p-3 rounded border border-slate-700">
-            <div className="text-xs text-slate-400 mb-1">Training Loss</div>
-            <div className="text-2xl font-mono text-red-400">{loss.toFixed(4)}</div>
+          <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/50 rounded-xl p-5 shadow-lg flex flex-col justify-center">
+             <div className="flex justify-between items-center mb-4">
+                <span className="font-semibold text-slate-200">Current Mode:</span>
+                <span className={`px-3 py-1 rounded text-sm font-bold uppercase ${
+                  mode === 'human' ? 'bg-blue-500/20 text-blue-400' : 
+                  mode === 'training' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'
+                }`}>
+                  {mode}
+                </span>
+             </div>
+             
+             <div className="space-y-3">
+               <button 
+                 onClick={() => {
+                   stateRef.current.crashed = false;
+                   stateRef.current.carX = 400;
+                   stateRef.current.angle = 0;
+                   stateRef.current.dataset = [];
+                   setDataCount(0);
+                   setMode('human');
+                 }}
+                 className="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded transition-colors text-sm font-semibold"
+               >
+                 Reset & Collect Data
+               </button>
+               
+               <button 
+                 onClick={() => setMode('training')}
+                 disabled={dataCount < 10}
+                 className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors text-sm font-semibold"
+               >
+                 Train Network
+               </button>
+             </div>
           </div>
         </div>
 
-        <div className="mt-auto pt-4 border-t border-slate-700 flex flex-col gap-2">
+        {/* Canvas */}
+        <div className="flex-1 bg-slate-950 border border-slate-700/50 rounded-xl overflow-hidden relative shadow-inner">
+          <SimulationCanvas draw={draw} update={update} width={800} height={600} className="w-full h-full object-cover" />
+          
           {mode === 'human' && (
-            <button 
-              onClick={handleTrain}
-              className="w-full py-2 bg-green-600 hover:bg-green-500 rounded transition-colors text-sm font-semibold"
-            >
-              Train Network
-            </button>
-          )}
-          {mode === 'training' && (
-            <button disabled className="w-full py-2 bg-yellow-600 rounded text-sm font-semibold opacity-50 cursor-not-allowed">
-              Training in progress...
-            </button>
-          )}
-          {mode === 'auto' && (
-            <button 
-              onClick={() => {
-                setMode('human');
-                stateRef.current.dataset = [];
-                setDatasetSize(0);
-                setLoss(0);
-                stateRef.current.nn = new NeuralNetwork(3, 16, 3);
-              }}
-              className="w-full py-2 bg-blue-600 hover:bg-blue-500 rounded transition-colors text-sm font-semibold"
-            >
-              Reset & Collect New Data
-            </button>
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-800/80 backdrop-blur-sm px-4 py-2 rounded-full text-sm text-slate-300 pointer-events-none border border-slate-700/50 animate-pulse">
+              Click here & use ⬅️ and ➡️ keys to steer
+            </div>
           )}
         </div>
       </div>
+
+      {/* Theory Panel */}
+      <TheoryPanel 
+        title="Imitation Learning" 
+        description="Explore how robots can learn complex behaviors simply by observing human experts."
+        sections={theorySections} 
+      />
     </div>
   );
 };

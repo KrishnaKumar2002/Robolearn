@@ -54,7 +54,7 @@ function App() {
           <h2 className="text-lg font-semibold capitalize">{activeLab} Lab</h2>
         </header>
         
-        <div className="flex-1 p-6 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col">
           {activeLab === 'control' && <ControlLab />}
           {activeLab === 'rl' && <RLLab />}
           {activeLab === 'imitation' && <ImitationLab />}
