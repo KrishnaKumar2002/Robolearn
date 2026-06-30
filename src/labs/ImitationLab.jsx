@@ -201,24 +201,24 @@ const ImitationLab = () => {
 
   return (
     <div 
-      className="flex h-full w-full bg-slate-900 overflow-hidden outline-none" 
+      className="flex flex-col xl:flex-row h-full w-full bg-slate-900 overflow-y-auto xl:overflow-hidden outline-none" 
       tabIndex="0" 
       onKeyDown={handleKeyDown} 
       onKeyUp={handleKeyUp}
     >
       {/* Simulation Area */}
-      <div className="flex-1 bg-slate-950 relative min-w-0 min-h-0 overflow-hidden">
+      <div className="flex-1 bg-slate-950 relative min-h-[50vh] xl:min-h-0 min-w-0 overflow-hidden">
         <SimulationCanvas draw={draw} update={update} width={800} height={600} className="w-full h-full object-contain" />
         
         {mode === 'human' && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-800/80 backdrop-blur-sm px-4 py-2 rounded-full text-sm text-slate-300 pointer-events-none border border-slate-700/50 animate-pulse shadow-lg">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-800/80 backdrop-blur-sm px-4 py-2 rounded-full text-sm text-slate-300 pointer-events-none border border-slate-700/50 animate-pulse shadow-lg whitespace-nowrap">
             Click here & use ⬅️ and ➡️ keys to steer
           </div>
         )}
       </div>
 
       {/* Scrollable Right Sidebar */}
-      <div className="w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-l border-slate-700/50 overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+      <div className="w-full xl:w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-t xl:border-t-0 xl:border-l border-slate-700/50 overflow-y-visible xl:overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
         
         {/* Controls Section */}
         <div className="p-5 border-b border-slate-700/50 bg-slate-800/60 shadow-inner">

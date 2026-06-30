@@ -220,15 +220,15 @@ const RLLab = () => {
   }, []);
 
   return (
-    <div className="flex h-full w-full bg-slate-900 overflow-hidden">
+    <div className="flex flex-col xl:flex-row h-full w-full bg-slate-900 overflow-y-auto xl:overflow-hidden">
       
       {/* Simulation Area */}
-      <div className="flex-1 bg-slate-950 relative min-w-0 min-h-0 overflow-hidden">
+      <div className="flex-1 bg-slate-950 relative min-h-[50vh] xl:min-h-0 min-w-0 overflow-hidden">
         <SimulationCanvas draw={draw} update={update} width={800} height={800} className="w-full h-full object-contain p-4" />
       </div>
 
       {/* Scrollable Right Sidebar */}
-      <div className="w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-l border-slate-700/50 overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+      <div className="w-full xl:w-96 flex flex-col bg-slate-800/90 backdrop-blur-xl border-t xl:border-t-0 xl:border-l border-slate-700/50 overflow-y-visible xl:overflow-y-auto shrink-0 shadow-2xl z-10 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
         
         {/* Controls Section */}
         <div className="p-5 border-b border-slate-700/50 bg-slate-800/60 shadow-inner">
